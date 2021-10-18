@@ -11,7 +11,7 @@ conda 国内源
 查看当前源
 conda config --show-sources
 添加源
-#conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/  #清华源停服 
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/  #清华源停服 
 腾讯云
 conda config --add channels https://mirrors.cloud.tencent.com/anaconda/pkgs/free/
 conda config --add channels https://mirrors.cloud.tencent.com/anaconda/pkgs/main/

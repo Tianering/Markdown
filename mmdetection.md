@@ -24,21 +24,53 @@ The parameters of model will not be updated during val epoch.
 Keyword total_epochs in the config only controls the number of training epochs and will not affect the validation workflow.
 Workflows [('train', 1), ('val', 1)] and [('train', 1)] will not change the behavior of EvalHook because EvalHook is called by after_train_epoch and validation workflow only affect hooks that are called through after_val_epoch. Therefore, the only difference between [('train', 1), ('val', 1)] and [('train', 1)] is that the runner will calculate losses on validation set after each training epoch.
 ```
-### ATSS——目标检测的自适应正负anchor选择(Adaptive Training Sample Selection)
-https://zhuanlan.zhihu.com/p/115407465
-7335MiB+8973MiB 3080*2	23.3 task/s  
+### ATSS_目标检测的自适应正负anchor选择(Adaptive Training Sample Selection)   
 选取retinaNet与FCOS进行对比，主要对比正负样本定义和回归开始状态的差异  
 
-	RetinaNet使用IoU阈值([公式],[公式])来区分正负anchor bbox，处于中间的全部忽略。FCOS使用空间尺寸和尺寸限制来区分正负anchor point，正样本首先必须在GT box内，其次需要是GT尺寸对应的层，其余均为负样本  
+	RetinaNet使用IoU阈值来区分正负anchor bbox，处于中间的全部忽略
+	FCOS使用空间尺寸和尺寸限制来区分正负anchor point，正样本首先必须在GT box内，其次需要是GT尺寸对应的层，其余均为负样本  
 	RetinaNet预测4个偏移值对anchor box进行调整输出，而FCOS则预测4个相对于anchor point值对anchor box进行调整输出    
 
 经过交叉实验发现，在相同的正负样本定义下RetinaNet和FCOS性能几乎一样，不同的定义方法性能差异较大，而回归初始状态对性能影响不大，由此可知正负样本的确定方法是影响性能的重要一环  
 ATSS方法：
 
-	该方法根据目标的相关统计特征自动进行正负样本的选择，具体逻辑如算法1所示。对于每个GT box，首先在每个特征层找到中心点最近的k个候选anchor boxes(非预测结果)，计算候选box与GT间的IoU，计算IoU的均值和标准差，得到IoU阈值，最后选择阈值大于均值与标准差之和的box作为最后的输出。如果anchor box对应多个GT，则选择IoU最大的GT
+	该方法根据目标的相关统计特征自动进行正负样本的选择，具体逻辑如算法1所示
+	对于每个GT box，首先在每个特征层找到中心点最近的k个候选anchor boxes(非预测结果)，计算候选box与GT间的IoU，计算IoU的均值和标准差，得到IoU阈值，最后选择阈值大于均值与标准差之和的box作为最后的输出。如果anchor box对应多个GT，则选择IoU最大的GT  
+
+![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/Atss.jpg)  
+resnet101 23.3 task/s 
+samples_per_gpu=2, 
+workers_per_gpu=2
+7335MiB+8973MiB 3080*2
+resnet50   29.0 task/s
+samples_per_gpu=4, 
+workers_per_gpu=4   
+8415+8207 3080*2
+### RetinaNet_Focal Loss  
+针对One-Stage算法采样时导致的正负样本不平衡问题，提出loss函数解决类别标签不平衡问题  
+
+	Two-Stage算法在生成框阶段使用Selective Search, EdgeBoxes, RPN的结构极大的减少了背景框的数量，使其大约为1k~2k。在分类阶段，使用一些策略，如使前景背景的比例为1:3或者OHEM算法，这样就使得正负样本达到了一个平衡  
+	One-Stage算法在进行将采样的同时产生预选框，在实际中经常会产生很多框，造成了样本间的极度不平衡，虽然有时会使用bootstrapping和hard example mining，但是效率很低  
+
+Focal loss在cross entropy loss的基础上增加一个调节因子![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/Focalloss.svg)  
+
+### FCOS  
+在anchor-based目标检测算法中，anchor的大小、数量、长宽比等对检测性能影响很大，针对不同的任务需要重新进行设置才能保证检测器的效果；同时在匹配真实框时会生成大量anchor，容易造成样本件的不平衡，并且训练过程中对所有anchor计算IOU会消耗大量内存和时间  
+FCOS相较于早期其他的AnchorFree算法解决了两个问题：  
+1. 物体重叠问题  
+	在FCOS不再只是学习预测中心点，而是对于每个位置，预测他到GTbox上下左右的四个距离的前提情况下，一旦两个GTbox发生重叠，将会发生样本冲突  
+	为了解决此问题，FCOS参考FPN的工作，使用基于FPN的多尺度检测可以很好的减少这种情况  
+2. center-ness  
+	按照FOCS的思路，不包含目标的像素也会成为正例，同时FCOS也认为没有目标的预测应该贡献小，相反包含物体的像素则贡献大  
+	作者提出Center-ness来解决此问题，并使用BCE loss对center-cess进行优化  
+	![]()
+	resnet50_caffe 1x
+	10001+7815 3080*2
 
 ### 使用COCO公共数据集进行模型训练评估  
 
-| Network | Dataset | Backbone | style | Lr schd | Mem | mAP | AP50 | APs | APm | APl |
-|:-------------:|:----------:|:-------:|:--------:|:--------------:|:------:|:-------:|:------:|:--------:|:--------:|::--------:|
-| ATSS | COCO2014 | Resnet101 | Pytorch | 0.0025 |  |  |  |  |  |  |
+| Network | Dataset | Backbone | style | Lr schd | Mem | mAP | AP50 | APs | APm | APl |  
+|:-------:|:-------:|:-------:|:--------:|:-------:|:------:|:-------:|:------:|:--------:|:--------:|::--------:|  
+| ATSS | COCO2014 | Resnet101 | Pytorch | 0.0025_1x |  | 0.395 | 0.577 | 0.217 | 0.423 | 0.491 | 
+| ATSS | COCO2014 | Resnet50  | Pytorch | 0.0025_1x |  | 0.361 | 0.546 | 0.199 | 0.386 | 0.447 |  
+| FCOS | COCO2014 | Resnet50  | Pytorch | 0.0025_1x |  |  |  |  |  |  |  

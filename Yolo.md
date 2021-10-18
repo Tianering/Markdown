@@ -3,7 +3,7 @@
 Yolox将原本的Yolo head修改为Decoupled Head  
 使用Decoupled Head时收敛速度会更快，精度会更高，但是将检测头解耦，会增加运算的复杂度  
 Yolox经过速度和性能的权衡，使用1×1卷积先进行降维，并在之后分支中使用3×3卷积  
-![](https://raw.githubusercontent.com/Tianering/MarkdownPhoto/master/DecoupledHead.jpg)
+![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DecoupledHead.jpg)
 
 1. 主要对目标框类别、预测分数
 2. 主要判断目标框是前景还是背景
