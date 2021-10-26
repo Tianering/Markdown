@@ -2,6 +2,10 @@
 ### 配置文件
 https://mmdetection.readthedocs.io/zh_CN/latest/tutorials/config.html  
 
+8 gpus、imgs_per_gpu = 2：lr = 0.02；
+2 gpus、imgs_per_gpu = 2 或 4 gpus、imgs_per_gpu = 1：lr = 0.005；
+4 gpus、imgs_per_gpu = 2：lr = 0.01  
+
 训练的batch量与学习率成正比，按照这个比例 lr=0.01 for 4 GPUs * 2 img/gpu 修改  
 原学习率按照八张显卡设置 ：lr = (base_lr / 8) x num_gpus x (img_per_gpu/2) 
 samples_per_gpu (int): Number of training samples on each GPU, i.e.,batch size of each GPU.  
@@ -39,12 +43,10 @@ ATSS方法：
 
 ![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/Atss.jpg)  
 resnet101 23.3 task/s 
-samples_per_gpu=2, 
-workers_per_gpu=2
+2*2
 7335MiB+8973MiB 3080*2
 resnet50   29.0 task/s
-samples_per_gpu=4, 
-workers_per_gpu=4   
+4*4 
 8415+8207 3080*2
 ### RetinaNet_Focal Loss  
 针对One-Stage算法采样时导致的正负样本不平衡问题，提出loss函数解决类别标签不平衡问题  
@@ -62,15 +64,57 @@ FCOS相较于早期其他的AnchorFree算法解决了两个问题：
 	为了解决此问题，FCOS参考FPN的工作，使用基于FPN的多尺度检测可以很好的减少这种情况  
 2. center-ness  
 	按照FOCS的思路，不包含目标的像素也会成为正例，同时FCOS也认为没有目标的预测应该贡献小，相反包含物体的像素则贡献大  
-	作者提出Center-ness来解决此问题，并使用BCE loss对center-cess进行优化  
-	![]()
-	resnet50_caffe 1x
-	10001+7815 3080*2
+	作者提出Center-ness来解决此问题，并使用BCE loss对center-cess进行优化，当loss越小，center-ness就越接近1，即回归框的中心越接近真实框   
+	![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/Centerness.jpg)  
+
+resnet50_caffe 1x	4*4  
+10001+7815 3080*2
+resnet50_caffe 2x mstrain img_scale=[(1333, 640), (1333, 800) 多尺度策略 (multi scale strategy)
+10001+9229  
+
+#### NAS-FCOS  
+搜索空间中加入了deformable卷积  
+将head分成两个部分，不共享的权重和共享权重，前者实际可以合并到特征融合中，后者可以类比RetinaNet中不同尺度权重共享的部分  
+相比NAS-FPN，没有太大的创新点，性能提升去除deformable卷积的影响，涨点相对不是很明显  
+resnet50_caffe 4*4  
+9491+9297 3080*2  
+### SSD_Single Shot MultiBox Detector  
+从YOLO中继承了将detection转化为regression的思路，一次完成目标定位与分类  
+基于Faster RCNN中的Anchor，提出了相似的Prior box  
+
+	Prior Box 按照一定规则生成
+	SSD使用感受野小的feature map检测小目标，使用感受野大的feature map检测更大目标
+	要人工设置prior box的min_size，max_size和aspect_ratio值
+
+加入基于特征金字塔（Pyramidal Feature Hierarchy）的检测方式，即在不同感受野的feature map上预测目标  
+
+	SSD采用金字塔结构，即利用了conv4-3/conv-7/conv6-2/conv7-2/conv8_2/conv9_2这些大小不同的feature maps，在多个feature maps上同时进行softmax分类和位置回归
+	虽然采用了pyramdial feature hierarchy的思路，但是对小目标的recall依然一般，并没有达到碾压Faster RCNN的级别
+	作者认为，这是由于SSD使用conv4_3低级feature去检测小目标，而低级特征卷积层数少，存在特征提取不充分的问题
+
+ssd300	32*3
+8029+8029 3080*2   
+
+120.3 task/s 
+
+ssd512 16*3  
+9653*2	3080*2  
+75.5 task/s  
+
+### DETR_End To End Object Detection with Transformer  
+整体结构与Transformer类似：  
+首先通过Backbone得到的特征铺平，加上Position信息之后送到Encoder中  
+之后得到一些candidates的特征，这100个candidates被Decoder并行解码，以得到最后的检测框  
 
 ### 使用COCO公共数据集进行模型训练评估  
 
-| Network | Dataset | Backbone | style | Lr schd | Mem | mAP | AP50 | APs | APm | APl |  
-|:-------:|:-------:|:-------:|:--------:|:-------:|:------:|:-------:|:------:|:--------:|:--------:|::--------:|  
-| ATSS | COCO2014 | Resnet101 | Pytorch | 0.0025_1x |  | 0.395 | 0.577 | 0.217 | 0.423 | 0.491 | 
-| ATSS | COCO2014 | Resnet50  | Pytorch | 0.0025_1x |  | 0.361 | 0.546 | 0.199 | 0.386 | 0.447 |  
-| FCOS | COCO2014 | Resnet50  | Pytorch | 0.0025_1x |  |  |  |  |  |  |  
+|   Network    | Dataset  | Backbone  |  style  |  Lr schd  |  Mem  |  mAP  | AP50  |  APs  |  APm  | APl   |
+| :----------: | :------: | :-------: | :-----: | :-------: | :---: | :---: | :---: | :---: | :---: | ----- |
+|     ATSS     | COCO2014 | Resnet101 | Pytorch | 0.0025_1x | 410.2 | 0.395 | 0.577 | 0.217 | 0.423 | 0.491 |
+|     ATSS     | COCO2014 | Resnet50  | Pytorch | 0.0025_1x | 257.9 | 0.361 | 0.546 | 0.199 | 0.386 | 0.447 |
+|     FCOS     | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x | 257.7 | 0.331 | 0.529 | 0.173 | 0.357 | 0.415 |
+| FCOS_mstrain | COCO2014 | Resnet50  |  Caffe  | 0.0025_2x | 257.7 | 0.356 | 0.554 | 0.196 | 0.381 | 0.443 |
+|   FCOS_NAS   | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x |       |           |       |       |       |       |
+|    SSD300    | COCO2014 |   VGG16   |  Caffe  | 0.002_2x  | 274.5 |     0.242 | 0.427 | 0.065 | 0.254 | 0.384 |
+|    SSD512    | COCO2014 |   VGG16   |  Caffe  | 0.001_2x  | 288.4 |     0.276 | 0.478 | 0.109 | 0.307 | 0.406 |
+
