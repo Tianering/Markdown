@@ -25,7 +25,7 @@ $ echo 'root:shanyi' | chpasswd
 $ sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 $ sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
 $ echo "export VISIBLE=now" >> /etc/profile
-如果连不上SSH服务，可能是某些版本的PermitRootLogin yes默认被注释了，可以使用如下(感谢 @Chenjie Xing 的反馈)：
+如果连不上SSH服务，可能是某些版本的PermitRootLogin yes默认被注释了，可以使用如下：
 sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
 
