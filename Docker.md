@@ -37,3 +37,23 @@ $ service ssh restart
 
 $ sudo docker port [your_container_name] 22
 $ ssh root@[your_host_ip] -p 8022
+
+
+
+$ cd opencv-3.4.1
+$ mkdir build
+$ cd build
+$ mkdir installed
+$ cmake \
+-DCMAKE_BUILD_TYPE=RELEASE \
+-DCMAKE_INSTALL_PREFIX=~/opencv-3.4.1/build/installed \
+\
+-DWITH_CUDA=OFF \
+\
+-DBUILD_DOCS=OFF \
+-DBUILD_EXAMPLES=OFF \
+-DBUILD_TESTS=OFF \
+-DBUILD_PERF_TESTS=OFF \ 
+..
+$ make -j4
+$ sudo make install
