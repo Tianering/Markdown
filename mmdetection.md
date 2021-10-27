@@ -102,9 +102,18 @@ ssd512 16*3
 75.5 task/s  
 
 ### DETR_End To End Object Detection with Transformer  
-整体结构与Transformer类似：  
+将Transformer运用到object detection邻域，取代某些模型需要手工设计的工作（非极大值抑制等），其整体结构与Transformer类似：  
 首先通过Backbone得到的特征铺平，加上Position信息之后送到Encoder中  
 之后得到一些candidates的特征，这100个candidates被Decoder并行解码，以得到最后的检测框  
+![DETR结构](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DETR.jpg)
+1. Transformer Encoder
+由图可知DETR并不是一个完全由Transformer处理的架构，还是需要依赖于CNN作为backbone提取特征，将CNN backbone输出的feature map转化为能够被Transformer Encoder处理的序列化数据的过程包括：
+	+ 维度压缩：将CNN backbone输出的 CxHxW 维的feature map先用 1x1 convolution处理，将channels数量从 C 压缩到 d ，即得到 dxHxW 维的新feature map
+	+ 序列化数据：将空间的维度（高和宽）压缩为一个维度，即把上一步得到的 dxHxW 维的feature map通过reshape成 dxHW 维的feature map；
+	+ positoin encoding: 由于transformer模型是顺序无关的，而 dxHW 维feature map中 HW 维度显然与原图的位置有关，所以需要加上position encoding反映位置信息
+
+2. Transformer Decoder
+
 
 ### 使用COCO公共数据集进行模型训练评估  
 
@@ -114,7 +123,7 @@ ssd512 16*3
 |     ATSS     | COCO2014 | Resnet50  | Pytorch | 0.0025_1x | 257.9 | 0.361 | 0.546 | 0.199 | 0.386 | 0.447 |
 |     FCOS     | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x | 257.7 | 0.331 | 0.529 | 0.173 | 0.357 | 0.415 |
 | FCOS_mstrain | COCO2014 | Resnet50  |  Caffe  | 0.0025_2x | 257.7 | 0.356 | 0.554 | 0.196 | 0.381 | 0.443 |
-|   FCOS_NAS   | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x |       |           |       |       |       |       |
-|    SSD300    | COCO2014 |   VGG16   |  Caffe  | 0.002_2x  | 274.5 |     0.242 | 0.427 | 0.065 | 0.254 | 0.384 |
-|    SSD512    | COCO2014 |   VGG16   |  Caffe  | 0.001_2x  | 288.4 |     0.276 | 0.478 | 0.109 | 0.307 | 0.406 |
+|   FCOS_NAS   | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x |       |       |       |       |       |       |
+|    SSD300    | COCO2014 |   VGG16   |  Caffe  | 0.002_2x  | 274.5 | 0.242 | 0.427 | 0.065 | 0.254 | 0.384 |
+|    SSD512    | COCO2014 |   VGG16   |  Caffe  | 0.001_2x  | 288.4 | 0.276 | 0.478 | 0.109 | 0.307 | 0.406 |
 
