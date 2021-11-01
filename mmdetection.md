@@ -28,6 +28,7 @@ The parameters of model will not be updated during val epoch.
 Keyword total_epochs in the config only controls the number of training epochs and will not affect the validation workflow.
 Workflows [('train', 1), ('val', 1)] and [('train', 1)] will not change the behavior of EvalHook because EvalHook is called by after_train_epoch and validation workflow only affect hooks that are called through after_val_epoch. Therefore, the only difference between [('train', 1), ('val', 1)] and [('train', 1)] is that the runner will calculate losses on validation set after each training epoch.
 ```
+- - -
 ### ATSS_目标检测的自适应正负anchor选择(Adaptive Training Sample Selection)   
 选取retinaNet与FCOS进行对比，主要对比正负样本定义和回归开始状态的差异  
 
@@ -48,6 +49,7 @@ resnet101 23.3 task/s
 resnet50   29.0 task/s
 4*4 
 8415+8207 3080*2
+- - -
 ### RetinaNet_Focal Loss  
 针对One-Stage算法采样时导致的正负样本不平衡问题，提出loss函数解决类别标签不平衡问题  
 
@@ -55,7 +57,7 @@ resnet50   29.0 task/s
 	One-Stage算法在进行将采样的同时产生预选框，在实际中经常会产生很多框，造成了样本间的极度不平衡，虽然有时会使用bootstrapping和hard example mining，但是效率很低  
 
 Focal loss在cross entropy loss的基础上增加一个调节因子![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/Focalloss.svg)  
-
+- - -
 ### FCOS  
 在anchor-based目标检测算法中，anchor的大小、数量、长宽比等对检测性能影响很大，针对不同的任务需要重新进行设置才能保证检测器的效果；同时在匹配真实框时会生成大量anchor，容易造成样本件的不平衡，并且训练过程中对所有anchor计算IOU会消耗大量内存和时间  
 FCOS相较于早期其他的AnchorFree算法解决了两个问题：  
@@ -71,13 +73,14 @@ resnet50_caffe 1x	4*4
 10001+7815 3080*2
 resnet50_caffe 2x mstrain img_scale=[(1333, 640), (1333, 800) 多尺度策略 (multi scale strategy)
 10001+9229  
-
+- - -
 #### NAS-FCOS  
 搜索空间中加入了deformable卷积  
 将head分成两个部分，不共享的权重和共享权重，前者实际可以合并到特征融合中，后者可以类比RetinaNet中不同尺度权重共享的部分  
 相比NAS-FPN，没有太大的创新点，性能提升去除deformable卷积的影响，涨点相对不是很明显  
 resnet50_caffe 4*4  
 9491+9297 3080*2  
+- - -
 ### SSD_Single Shot MultiBox Detector  
 从YOLO中继承了将detection转化为regression的思路，一次完成目标定位与分类  
 基于Faster RCNN中的Anchor，提出了相似的Prior box  
@@ -100,30 +103,59 @@ ssd300	32*3
 ssd512 16*3  
 9653*2	3080*2  
 75.5 task/s  
-
+- - -
 ### DETR_End To End Object Detection with Transformer  
+![DETR结构](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DETR.jpg)
 将Transformer运用到object detection邻域，取代某些模型需要手工设计的工作（非极大值抑制等），其整体结构与Transformer类似：  
 首先通过Backbone得到的特征铺平，加上Position信息之后送到Encoder中  
 之后得到一些candidates的特征，这100个candidates被Decoder并行解码，以得到最后的检测框  
-![DETR结构](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DETR.jpg)
-1. Transformer Encoder
-由图可知DETR并不是一个完全由Transformer处理的架构，还是需要依赖于CNN作为backbone提取特征，将CNN backbone输出的feature map转化为能够被Transformer Encoder处理的序列化数据的过程包括：
+![DETR中的Transformer](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DETR_Transfoemer.jpg)
+1. Transformer Encoder  
+由图可知DETR并不是一个完全由Transformer处理的架构，还是需要依赖于CNN作为backbone提取特征，将CNN backbone输出的feature map转化为能够被Transformer Encoder处理的序列化数据的过程包括：  
+
 	+ 维度压缩：将CNN backbone输出的 CxHxW 维的feature map先用 1x1 convolution处理，将channels数量从 C 压缩到 d ，即得到 dxHxW 维的新feature map
 	+ 序列化数据：将空间的维度（高和宽）压缩为一个维度，即把上一步得到的 dxHxW 维的feature map通过reshape成 dxHW 维的feature map；
-	+ positoin encoding: 由于transformer模型是顺序无关的，而 dxHW 维feature map中 HW 维度显然与原图的位置有关，所以需要加上position encoding反映位置信息
+	+ positoin encoding: 由于transformer模型是顺序无关的，而 dxHW 维feature map中 HW 维度显然与原图的位置有关，所以需要加上position encoding反映位置信息  
 
-2. Transformer Decoder
+2. Transformer Decoder  
+DETR的decoder操作同样与Transfoemer类似，区别在于每个Decoder有两个输入，分别是Encoder的结果与Object Queries  
 
+	Object Queries 是 N 个 Queries 实例的 Embedding ,用于反应不同的位置信息
 
+3. FFN(Feed-forward network)  
+在最后一个Decoder之后紧接两个FFN，分别用以检预测检测框（bounding box 的中心位置、高、宽）及其类别 
+- - -
+### DCN——Deformable Convolutional Networks  
+在卷积和RoI池中增加额外的偏移量并从目标任务中学习偏移量，从而增加空间采样位置  
+
++ 可变形卷积（deformable convolution）  
+
+为了削弱网络难以适应几何变形的限制，对卷积核中每个采样点的位置都增加了一个偏移的变量，通过这些变量卷积核就可以在当前位置附近随意的采样，不再局限于之前的规则格点  
+
+	传统CNN网络从大量数据中学习到有效特征，避免了传统方式人工设计特征的弊端；但这种方式对物体几何形变的适应能力几乎完全来自于数据本身所具有的多样性，其模型内部并不具有适应几何形变的机制
+	卷积操作在输入图像的每个位置时会进行基于规则格点位置的采样，然后对于采样到的图像值做卷积并作为该位置的输出，这样的规则化采样造成了上述限制
+
++ 可变形ROI pooling  
+
+先对RoI对应的每个bin按照RoI的长宽比例的倍数进行整体偏移(同样偏移后的位置是小数，使用双线性差值来求)，然后再pooling  
+![](https://raw.githubusercontent.com/Tianering/Markdown/master/images/DeformableROI.jpg)
+
+- - -
+### Deformable DETR  
+DETR存在的问题  
+	训练周期长，相比faster rcnn慢10-20倍
+	对小目标不友好；通常使用多尺度特征来解小目标，但高分辨率的特征图大大提高DETR复杂度
++ Deformable Attention Module
+对每一个query，之前关注所有的空间位置（所有位置作为key），现在只关注更有意义的、网络认为更包含局部信息的位置（少且固定数量位置作为key），缓解特征图大带来大运算量的问题
+- - -
 ### 使用COCO公共数据集进行模型训练评估  
 
 |   Network    | Dataset  | Backbone  |  style  |  Lr schd  |  Mem  |  mAP  | AP50  |  APs  |  APm  | APl   |
-| :----------: | :------: | :-------: | :-----: | :-------: | :---: | :---: | :---: | :---: | :---: | ----- |
+| :----------: | :------: | :-------: | :-----: | :-------: | :---: |    :---: | :---: | :---: | :---: | ----- |
 |     ATSS     | COCO2014 | Resnet101 | Pytorch | 0.0025_1x | 410.2 | 0.395 | 0.577 | 0.217 | 0.423 | 0.491 |
 |     ATSS     | COCO2014 | Resnet50  | Pytorch | 0.0025_1x | 257.9 | 0.361 | 0.546 | 0.199 | 0.386 | 0.447 |
 |     FCOS     | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x | 257.7 | 0.331 | 0.529 | 0.173 | 0.357 | 0.415 |
 | FCOS_mstrain | COCO2014 | Resnet50  |  Caffe  | 0.0025_2x | 257.7 | 0.356 | 0.554 | 0.196 | 0.381 | 0.443 |
-|   FCOS_NAS   | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x |       |       |       |       |       |       |
+|   FCOS_NAS   | COCO2014 | Resnet50  |  Caffe  | 0.0025_1x | 308.0 | 0.350 | 0.541 | 0.183 | 0.375 | 0.445 |
 |    SSD300    | COCO2014 |   VGG16   |  Caffe  | 0.002_2x  | 274.5 | 0.242 | 0.427 | 0.065 | 0.254 | 0.384 |
 |    SSD512    | COCO2014 |   VGG16   |  Caffe  | 0.001_2x  | 288.4 | 0.276 | 0.478 | 0.109 | 0.307 | 0.406 |
-
