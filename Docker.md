@@ -57,3 +57,10 @@ $ cmake \
 ..
 $ make -j4
 $ sudo make install
+
+- - -
+
+docker kill --signal=SIGINT 容器名称或容器id
+docker ps  #找到容器的CONTAINER ID
+ps -aux | grep CONTAINER ID
+kill -9 PID
