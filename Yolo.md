@@ -58,6 +58,8 @@ YOLOX_x(0.33)
 best ap50_95:78.0 model size:71MB  
 YOLOX_x(1)  
 best ap50_95:79.42 model size:434MB  
+YOLOX_x(1.25) 
+best ap50_95:79.65 model size:7MB
 ```
 YOLOF
 ```
